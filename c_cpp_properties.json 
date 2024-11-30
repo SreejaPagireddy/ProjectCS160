@@ -1,0 +1,15 @@
+{
+    "configurations": [
+        {
+            "name": "Mac",
+            "includePath": [
+                "/usr/include/c++/16.0.0",
+                "/usr/include/c++/16.0.0/backward",
+                "/usr/local/include",
+                "/usr/include"
+            ],
+            "intelliSenseMode": "macos-gcc-x64",
+            "compilerPath": "/usr/bin/g++"
+        }
+    ]
+}
