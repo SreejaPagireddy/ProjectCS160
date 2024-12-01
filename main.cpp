@@ -10,25 +10,38 @@
 //What is Dijkstra's Algorithm: Finds the shortest path from one node to every other node in graph, choose the smallest path and repeat process for each node
 //Time complexity of Dijkstra is O(|E| + |V|log|V|)
 
+// g++ -o dijkstra main.cpp
+// ./dijkstra
+// this is how u compile and run
+// u can start working on implementing a time for each fastest distance
+// cause we need to see if we can beat the time
+
 #include <iostream>
 #include <vector>
 #include <list>
 #include <set>
 #include <utility>
+#include <iomanip> 
 using namespace std;
 
 #define INF 0x3f3f3f3f
 
 class Graph {
+    //number of vertices
     int V;
+    //vertex and weight pair for every edge
     list< pair<int, int> > *adj;
 
 public:
+    //constructor 
     Graph(int V);
+    //fxn to add an edge to graph
     void addEdge(int a, int b, int c);
-    void shortestPath(int src); 
+    //prints shortest path from source
+    void shortestPath(int src, double speed); 
 };
 
+//allocates memory for adjecency list
 Graph::Graph(int V) {
     this->V = V;
     adj = new list< pair<int, int> >[V];
@@ -39,12 +52,22 @@ void Graph::addEdge(int a, int b, int c) {
     adj[b].push_back(make_pair(a, c));
 }
 
-void Graph::shortestPath(int src) {
+//print shortest paths from source to all other vertices
+void Graph::shortestPath(int src, double speed) {
+    //set to store vertices tht are being processed
     set< pair<int, int> > setds;
+    //vector for distances and initialize all distances as INF
     vector<int> dist(V, INF);
+    //vector to store time iniatialized to INF
+    vector<double> time(V, INF);
+
+    //insert source in set and initialize its distance to 0
     dist[src] = 0;
+    //starting vertex time is 0
+    time[src] = 0;
     setds.insert(make_pair(0, src));
 
+    //loop till all shortest distances are finalized then setds will become empty
     while (!setds.empty()) {
         pair<int, int> tmp = *(setds.begin());  
         setds.erase(setds.begin());  
@@ -60,14 +83,15 @@ void Graph::shortestPath(int src) {
                     setds.erase(setds.find(make_pair(dist[v], v)));  
                 }
                 dist[v] = dist[u] + weight;
+                time[v] = time[u] + (static_cast<double>(weight)/speed);
                 setds.insert(make_pair(dist[v], v));  
             }
         }
     }
 
-    printf("Vertex   Distance from Source\n");
+    printf("Vertex   Distance from Source\n    Time from Source\n");
     for (int i = 0; i < V; ++i) {
-        printf("%d \t\t %d\n", i, dist[i]);
+        printf("%d \t\t %d \t\t\t %.2f\n", i, dist[i], time[i]);
     }
 }
 
@@ -90,7 +114,10 @@ int main() {
     g.addEdge(6, 8, 6);
     g.addEdge(7, 8, 7);
 
-    g.shortestPath(0);
+    double speed = 1.0;
+    cout << "Enter the speed (units per time unit): ";
+    cin >> speed;
+    g.shortestPath(0, speed);
 
     return 0;
 }
