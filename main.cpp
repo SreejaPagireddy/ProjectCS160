@@ -21,6 +21,8 @@
 #include <list>
 #include <set>
 #include <utility>
+#include <thread>
+#include <mutex>
 #include <iomanip> 
 using namespace std;
 
@@ -31,6 +33,7 @@ class Graph {
     int V;
     //vertex and weight pair for every edge
     list< pair<int, int> > *adj;
+     mutex mtx; // mutex for thread synchronization
 
 public:
     //constructor 
@@ -39,6 +42,11 @@ public:
     void addEdge(int a, int b, int c);
     //prints shortest path from source
     void shortestPath(int src, double speed); 
+
+private:
+    void processNeighbors(int u, const vector<int> &dist, vector<int> &distCopy,
+                          const vector<double> &time, vector<double> &timeCopy, set<pair<int, int>> &setds,
+                          list<pair<int, int>>::iterator start, list<pair<int, int>>::iterator end, double speed);
 };
 
 //allocates memory for adjecency list
@@ -50,6 +58,26 @@ Graph::Graph(int V) {
 void Graph::addEdge(int a, int b, int c) {
     adj[a].push_back(make_pair(b, c));  
     adj[b].push_back(make_pair(a, c));
+}
+
+void Graph::processNeighbors(int u, const vector<int> &dist, vector<int> &distCopy,
+                             const vector<double> &time, vector<double> &timeCopy, set<pair<int, int>> &setds,
+                             list<pair<int, int>>::iterator start, list<pair<int, int>>::iterator end, double speed) {
+    for (auto it = start; it != end; ++it) {
+        int v = it->first;
+        int weight = it->second;
+
+        if (distCopy[v] > dist[u] + weight) {
+            // Locking critical section
+            lock_guard<mutex> lock(mtx);
+            if (distCopy[v] != INF) {
+                setds.erase(make_pair(distCopy[v], v));
+            }
+            distCopy[v] = dist[u] + weight;
+            timeCopy[v] = time[u] + (static_cast<double>(weight) / speed);
+            setds.insert(make_pair(distCopy[v], v));
+        }
+    }
 }
 
 //print shortest paths from source to all other vertices
@@ -73,23 +101,34 @@ void Graph::shortestPath(int src, double speed) {
         setds.erase(setds.begin());  
         int u = tmp.second; 
 
-        for (auto i = adj[u].begin(); i != adj[u].end(); ++i) {
-            int v = i->first;  
-            int weight = i->second;  
+        // Threaded processing of neighbors
+        vector<int> distCopy = dist;
+        vector<double> timeCopy = time;
+        vector<thread> threads;
 
-            
-            if (dist[v] > dist[u] + weight) {
-                if (dist[v] != INF) {
-                    setds.erase(setds.find(make_pair(dist[v], v)));  
-                }
-                dist[v] = dist[u] + weight;
-                time[v] = time[u] + (static_cast<double>(weight)/speed);
-                setds.insert(make_pair(dist[v], v));  
-            }
+        auto it = adj[u].begin();
+        size_t totalNeighbors = adj[u].size();
+        size_t threadCount = 4; // Number of threads to use
+        size_t chunkSize = (totalNeighbors + threadCount - 1) / threadCount; // Divide work
+
+        for (size_t i = 0; i < threadCount && it != adj[u].end(); ++i) {
+            auto start = it;
+            advance(it, min(chunkSize, totalNeighbors));
+            threads.push_back(thread(&Graph::processNeighbors, this, u, cref(dist), ref(distCopy),
+                                      cref(time), ref(timeCopy), ref(setds), start, it, speed));
+            totalNeighbors -= chunkSize;
         }
-    }
 
-    printf("Vertex   Distance from Source\n    Time from Source\n");
+        // Join threads
+        for (auto &t : threads) {
+            t.join();
+        }
+
+        dist = distCopy;
+        time = timeCopy;
+        }
+
+    printf("Vertex   Distance from Source\n   Time from Source\n");
     for (int i = 0; i < V; ++i) {
         printf("%d \t\t %d \t\t\t %.2f\n", i, dist[i], time[i]);
     }
