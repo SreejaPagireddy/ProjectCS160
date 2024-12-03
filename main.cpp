@@ -24,7 +24,15 @@
 #include <thread>
 #include <mutex>
 #include <iomanip> 
+#include <chrono>
+#include <semaphore> // For std::counting_semaphore in C++20
+using namespace std::chrono;
 using namespace std;
+
+// Semaphore for synchronizing access to shared resources
+// std::counting_semaphore<1> sem_dist(1);  // For distCopy, only 1 thread can modify it at a time
+// std::counting_semaphore<1> sem_time(1);  // For timeCopy, only 1 thread can modify it at a time
+// std::counting_semaphore<1> sem_setds(1); // For setds, only 1 thread can modify it at a time
 
 #define INF 0x3f3f3f3f
 
@@ -45,8 +53,8 @@ public:
 
 private:
     void processNeighbors(int u, const vector<int> &dist, vector<int> &distCopy,
-                          const vector<double> &time, vector<double> &timeCopy, set<pair<int, int>> &setds,
-                          list<pair<int, int>>::iterator start, list<pair<int, int>>::iterator end, double speed);
+                          const vector<double> &time, vector<double> &timeCopy, set<pair<int, int> > &setds,
+                          list<pair<int, int> >::iterator start, list<pair<int, int> >::iterator end, double speed);
 };
 
 //allocates memory for adjecency list
@@ -61,14 +69,20 @@ void Graph::addEdge(int a, int b, int c) {
 }
 
 void Graph::processNeighbors(int u, const vector<int> &dist, vector<int> &distCopy,
-                             const vector<double> &time, vector<double> &timeCopy, set<pair<int, int>> &setds,
-                             list<pair<int, int>>::iterator start, list<pair<int, int>>::iterator end, double speed) {
+                             const vector<double> &time, vector<double> &timeCopy, set<pair<int, int> > &setds,
+                             list<pair<int, int> >::iterator start
+, list<pair<int, int> >::iterator end, double speed) {
     for (auto it = start; it != end; ++it) {
         int v = it->first;
         int weight = it->second;
 
         if (distCopy[v] > dist[u] + weight) {
             // Locking critical section
+            //adding semaphores
+            // sem_dist.acquire();
+            // sem_time.acquire();
+            // sem_setds.acquire();
+
             lock_guard<mutex> lock(mtx);
             if (distCopy[v] != INF) {
                 setds.erase(make_pair(distCopy[v], v));
@@ -76,6 +90,10 @@ void Graph::processNeighbors(int u, const vector<int> &dist, vector<int> &distCo
             distCopy[v] = dist[u] + weight;
             timeCopy[v] = time[u] + (static_cast<double>(weight) / speed);
             setds.insert(make_pair(distCopy[v], v));
+            //releasing semaphores
+            // sem_setds.release();
+            // sem_time.release();
+            // sem_dist.release();
         }
     }
 }
@@ -100,23 +118,21 @@ void Graph::shortestPath(int src, double speed) {
         pair<int, int> tmp = *(setds.begin());  
         setds.erase(setds.begin());  
         int u = tmp.second; 
-
-        // Threaded processing of neighbors
+        // Prepare necessary data
         vector<int> distCopy = dist;
         vector<double> timeCopy = time;
         vector<thread> threads;
 
         auto it = adj[u].begin();
         size_t totalNeighbors = adj[u].size();
-        size_t threadCount = 4; // Number of threads to use
+        size_t threadCount = 4; // Number of threads
         size_t chunkSize = (totalNeighbors + threadCount - 1) / threadCount; // Divide work
 
-        for (size_t i = 0; i < threadCount && it != adj[u].end(); ++i) {
+        for (size_t i = 0; i < threadCount; ++i) {
             auto start = it;
-            advance(it, min(chunkSize, totalNeighbors));
+            advance(it, min(chunkSize, totalNeighbors - i * chunkSize));  // Ensure correct chunk size per thread
             threads.push_back(thread(&Graph::processNeighbors, this, u, cref(dist), ref(distCopy),
-                                      cref(time), ref(timeCopy), ref(setds), start, it, speed));
-            totalNeighbors -= chunkSize;
+                                    cref(time), ref(timeCopy), ref(setds), start, it, speed));
         }
 
         // Join threads
@@ -124,8 +140,10 @@ void Graph::shortestPath(int src, double speed) {
             t.join();
         }
 
+        // Use distCopy and timeCopy after processing
         dist = distCopy;
         time = timeCopy;
+
         }
 
     printf("Vertex   Distance from Source\n   Time from Source\n");
@@ -156,7 +174,15 @@ int main() {
     double speed = 1.0;
     cout << "Enter the speed (units per time unit): ";
     cin >> speed;
+
+    auto start = high_resolution_clock::now(); // Start timer
     g.shortestPath(0, speed);
+    auto end = high_resolution_clock::now();   // End timer
+
+    // Calculate the time taken
+    auto duration = duration_cast<microseconds>(end - start);
+    cout << "Time taken to calculate shortest paths: " 
+         << duration.count() << " microseconds" << endl;
 
     return 0;
 }
