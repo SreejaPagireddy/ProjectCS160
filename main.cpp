@@ -55,6 +55,9 @@ private:
     void processNeighbors(int u, const vector<int> &dist, vector<int> &distCopy,
                           const vector<double> &time, vector<double> &timeCopy, set<pair<int, int> > &setds,
                           list<pair<int, int> >::iterator start, list<pair<int, int> >::iterator end, double speed);
+    // Function to execute parallel processing on the graph
+    void execute(int id, int ntasks, int N, vector<int> &distCopy, vector<double> &timeCopy,
+                 set<pair<int, int>> &setds, double speed);
 };
 
 //allocates memory for adjecency list
@@ -98,6 +101,29 @@ void Graph::processNeighbors(int u, const vector<int> &dist, vector<int> &distCo
     }
 }
 
+// Execute function to handle work partitioning for multiple threads
+void Graph::execute(int id, int ntasks, int N, vector<int> &distCopy, vector<double> &timeCopy,
+                    set<pair<int, int>> &setds, double speed) {
+    int partition = N / ntasks;  // Divide the work among threads
+    int start_index = (id == 0) ? 1 : partition * id;  // Start index for each thread
+    int end_index = (id == ntasks - 1) ? N - 1 : (id + 1) * partition;  // End index for each thread
+
+    // Processing the neighbors using a partitioned range
+    for (int x = start_index; x < end_index; ++x) {
+        for (int y = 1; y < N - 1; ++y) {
+            // This is my cell
+            double cell = distCopy[x * N + y];
+            double north = distCopy[(x - 1) * N + y];
+            double south = distCopy[(x + 1) * N + y];
+            double east = distCopy[x * N + y + 1];
+            double west = distCopy[x * N + y - 1];
+
+            // Update the cell using the average (NEWS stencil)
+            distCopy[x * N + y] = (cell + north + south + east + west) / 5.0;
+        }
+    }
+}
+
 //print shortest paths from source to all other vertices
 void Graph::shortestPath(int src, double speed) {
     //set to store vertices tht are being processed
@@ -127,25 +153,26 @@ void Graph::shortestPath(int src, double speed) {
         size_t totalNeighbors = adj[u].size();
         size_t threadCount = 4; // Number of threads
         size_t chunkSize = (totalNeighbors + threadCount - 1) / threadCount; // Divide work
-
-        for (size_t i = 0; i < threadCount; ++i) {
-            auto start = it;
-            advance(it, min(chunkSize, totalNeighbors - i * chunkSize));  // Ensure correct chunk size per thread
-            threads.push_back(thread(&Graph::processNeighbors, this, u, cref(dist), ref(distCopy),
-                                    cref(time), ref(timeCopy), ref(setds), start, it, speed));
+        ///Zara implementation
+        // for (size_t i = 0; i < threadCount; ++i) {
+        //     auto start = it;
+        //     advance(it, min(chunkSize, totalNeighbors - i * chunkSize));  // Ensure correct chunk size per thread
+        //     threads.push_back(thread(&Graph::processNeighbors, this, u, cref(dist), ref(distCopy),
+        //                             cref(time), ref(timeCopy), ref(setds), start, it, speed));
+        // }
+        // Call execute for each thread
+        for (int i = 0; i < threadCount; ++i) {
+            threads.push_back(thread(&Graph::execute, this, i, threadCount, V, ref(distCopy), ref(timeCopy),
+                                     ref(setds), speed));
         }
-
         // Join threads
         for (auto &t : threads) {
             t.join();
         }
-
         // Use distCopy and timeCopy after processing
         dist = distCopy;
         time = timeCopy;
-
         }
-
     printf("Vertex   Distance from Source\n   Time from Source\n");
     for (int i = 0; i < V; ++i) {
         printf("%d \t\t %d \t\t\t %.2f\n", i, dist[i], time[i]);
