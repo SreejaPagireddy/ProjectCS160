@@ -109,20 +109,39 @@ void Graph::execute(int id, int ntasks, int N, vector<int> &distCopy, vector<dou
     int end_index = (id == ntasks - 1) ? N - 1 : (id + 1) * partition;  // End index for each thread
 
     // Processing the neighbors using a partitioned range
-    for (int x = start_index; x < end_index; ++x) {
-        for (int y = 1; y < N - 1; ++y) {
-            // This is my cell
-            double cell = distCopy[x * N + y];
-            double north = distCopy[(x - 1) * N + y];
-            double south = distCopy[(x + 1) * N + y];
-            double east = distCopy[x * N + y + 1];
-            double west = distCopy[x * N + y - 1];
+    for (int index = start_index; index < end_index; ++index) {
+        // Calculate the neighbors
+        int north = index - N; // One row above
+        int south = index + N; // One row below
+        int east = (index % N != N - 1) ? index + 1 : -1; // One column right
+        int west = (index % N != 0) ? index - 1 : -1;     // One column left
 
-            // Update the cell using the average (NEWS stencil)
-            distCopy[x * N + y] = (cell + north + south + east + west) / 5.0;
+        double cell = distCopy[index];
+        double total = cell;
+        int count = 1;
+
+        if (north >= 0) {
+            total += distCopy[north];
+            ++count;
         }
+        if (south < N * N) {
+            total += distCopy[south];
+            ++count;
+        }
+        if (east != -1) {
+            total += distCopy[east];
+            ++count;
+        }
+        if (west != -1) {
+            total += distCopy[west];
+            ++count;
+        }
+
+        // Update the current cell with the average of itself and its neighbors
+        distCopy[index] = total / count;
     }
 }
+
 
 //print shortest paths from source to all other vertices
 void Graph::shortestPath(int src, double speed) {
