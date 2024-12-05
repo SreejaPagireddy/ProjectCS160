@@ -168,23 +168,26 @@ void Graph::shortestPath(int src, double speed) {
         vector<int> distCopy = dist;
         vector<double> timeCopy = time;
         vector<thread> threads;
-
+        //the execute function is giving better results, zara function has a overhead because she is calling and passing in the function.
+        // Zara code is Dynamically chunking. The total neighbors is the parameters for chunk size, not all the chunk size is equally distrubuted for threads
+        //Some graph nodes have multiple or just some. We can divide the chunk size where the total neighbors are balanced
         auto it = adj[u].begin();
         size_t totalNeighbors = adj[u].size();
-        size_t threadCount = 4; // Number of threads
-        size_t chunkSize = (totalNeighbors + threadCount - 1) / threadCount; // Threads are processing in parallel
+        size_t threadCount = 6; // Number of threads, manually change this number, or we can add the threads in the command line
+        // The chunk size arent evenly divided
+        size_t chunkSize = (totalNeighbors + threadCount - 1) / threadCount; // Threads are processing in parallel, chunk size are bigger
         ///Zara implementation
-        for (size_t i = 0; i < threadCount; ++i) {
-            auto start = it;
-            advance(it, min(chunkSize, totalNeighbors - i * chunkSize));  // Ensure correct chunk size per thread
-            threads.push_back(thread(&Graph::processNeighbors, this, u, cref(dist), ref(distCopy),
-                                    cref(time), ref(timeCopy), ref(setds), start, it, speed));
-        }
-        // Call execute for each thread
-        // for (int i = 0; i < threadCount; ++i) {
-        //     threads.push_back(thread(&Graph::execute, this, i, threadCount, V, ref(distCopy), ref(timeCopy),
-        //                              ref(setds), speed));
+        // for (size_t i = 0; i < threadCount; ++i) {
+        //     auto start = it;
+        //     advance(it, min(chunkSize, totalNeighbors - i * chunkSize));  // Ensure correct chunk size per thread
+        //     threads.push_back(thread(&Graph::processNeighbors, this, u, cref(dist), ref(distCopy),
+        //                             cref(time), ref(timeCopy), ref(setds), start, it, speed));
         // }
+        // Call execute for each thread
+        for (int i = 0; i < threadCount; ++i) {
+            threads.push_back(thread(&Graph::execute, this, i, threadCount, V, ref(distCopy), ref(timeCopy),
+                                     ref(setds), speed));
+        }
         // Join threads
         for (auto &t : threads) {
             t.join();
