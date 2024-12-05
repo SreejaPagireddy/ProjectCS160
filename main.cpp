@@ -82,6 +82,7 @@ void Graph::processNeighbors(int u, const vector<int> &dist, vector<int> &distCo
         if (distCopy[v] > dist[u] + weight) {
             // Locking critical section
             //adding semaphores
+            //initilize the variables, have a bit
             // sem_dist.acquire();
             // sem_time.acquire();
             // sem_setds.acquire();
@@ -93,7 +94,7 @@ void Graph::processNeighbors(int u, const vector<int> &dist, vector<int> &distCo
             distCopy[v] = dist[u] + weight;
             timeCopy[v] = time[u] + (static_cast<double>(weight) / speed);
             setds.insert(make_pair(distCopy[v], v));
-            //releasing semaphores
+            // releasing semaphores
             // sem_setds.release();
             // sem_time.release();
             // sem_dist.release();
@@ -103,7 +104,7 @@ void Graph::processNeighbors(int u, const vector<int> &dist, vector<int> &distCo
 
 // Execute function to handle work partitioning for multiple threads
 void Graph::execute(int id, int ntasks, int N, vector<int> &distCopy, vector<double> &timeCopy,
-                    set<pair<int, int>> &setds, double speed) {
+    set<pair<int, int>> &setds, double speed) {
     int partition = N / ntasks;  // Divide the work among threads
     int start_index = (id == 0) ? 1 : partition * id;  // Start index for each thread
     int end_index = (id == ntasks - 1) ? N - 1 : (id + 1) * partition;  // End index for each thread
@@ -171,19 +172,19 @@ void Graph::shortestPath(int src, double speed) {
         auto it = adj[u].begin();
         size_t totalNeighbors = adj[u].size();
         size_t threadCount = 4; // Number of threads
-        size_t chunkSize = (totalNeighbors + threadCount - 1) / threadCount; // Divide work
+        size_t chunkSize = (totalNeighbors + threadCount - 1) / threadCount; // Threads are processing in parallel
         ///Zara implementation
-        // for (size_t i = 0; i < threadCount; ++i) {
-        //     auto start = it;
-        //     advance(it, min(chunkSize, totalNeighbors - i * chunkSize));  // Ensure correct chunk size per thread
-        //     threads.push_back(thread(&Graph::processNeighbors, this, u, cref(dist), ref(distCopy),
-        //                             cref(time), ref(timeCopy), ref(setds), start, it, speed));
-        // }
-        // Call execute for each thread
-        for (int i = 0; i < threadCount; ++i) {
-            threads.push_back(thread(&Graph::execute, this, i, threadCount, V, ref(distCopy), ref(timeCopy),
-                                     ref(setds), speed));
+        for (size_t i = 0; i < threadCount; ++i) {
+            auto start = it;
+            advance(it, min(chunkSize, totalNeighbors - i * chunkSize));  // Ensure correct chunk size per thread
+            threads.push_back(thread(&Graph::processNeighbors, this, u, cref(dist), ref(distCopy),
+                                    cref(time), ref(timeCopy), ref(setds), start, it, speed));
         }
+        // Call execute for each thread
+        // for (int i = 0; i < threadCount; ++i) {
+        //     threads.push_back(thread(&Graph::execute, this, i, threadCount, V, ref(distCopy), ref(timeCopy),
+        //                              ref(setds), speed));
+        // }
         // Join threads
         for (auto &t : threads) {
             t.join();
